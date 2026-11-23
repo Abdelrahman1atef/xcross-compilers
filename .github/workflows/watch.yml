@@ -27,6 +27,23 @@ jobs:
       LIMIT: ${{ github.event.inputs.limit || '4' }}
       OLDEST: ${{ github.event.inputs.oldest || '3.24.0' }}
     steps:
+      - name: Retry builds GitHub could not give a runner
+        # macOS arm64 runners are sometimes short ("The job was not acquired
+        # by Runner"); such jobs end as cancelled. Re-run those builds' failed
+        # jobs (the compilers already built are kept), up to three attempts.
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --status failure \
+            --limit 50 --json databaseId,attempt --jq '.[] | select(.attempt < 3) | .databaseId' |
+          while read -r run; do
+            cancelled=$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json jobs \
+              --jq '[.jobs[] | select(.conclusion == "cancelled")] | length')
+            failed=$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json jobs \
+              --jq '[.jobs[] | select(.conclusion == "failure")] | length')
+            if [ "$cancelled" -gt 0 ] && [ "$failed" -eq 0 ]; then
+              echo "Re-running run $run ($cancelled job(s) got no runner)"
+              gh run rerun "$run" --repo "$GITHUB_REPOSITORY" --failed || true
+            fi
+          done
       - name: Start builds for missing versions
         run: |
           key() { echo "$1" | awk -F. '{ printf "%05d%05d%05d", $1, $2, $3 }'; }
