@@ -22,11 +22,15 @@ on:
         description: Publish the release
         type: boolean
         default: true
+      reference_from:
+        description: Reuse the macOS reference of this earlier run of the same Flutter version (optional)
+        default: ''
   push:
     tags: ['[0-9]+.[0-9]+.[0-9]+']
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: build-${{ github.event.inputs.flutter || github.ref_name }}
@@ -48,6 +52,9 @@ jobs:
 
   reference:
     needs: resolve
+    # Flutter's own output for a version never changes: an earlier run's
+    # reference can stand in when macOS runners are short.
+    if: ${{ github.event.inputs.reference_from == '' || github.event.inputs.reference_from == null }}
     runs-on: macos-15
     strategy:
       fail-fast: false
@@ -114,7 +121,7 @@ jobs:
     needs: [resolve, reference, build]
     # Every compiler that built is verified, even when another build failed
     # (its leg fails at the download). Publishing still needs all eight.
-    if: ${{ !cancelled() && needs.reference.result == 'success' }}
+    if: ${{ !cancelled() && (needs.reference.result == 'success' || (needs.reference.result == 'skipped' && github.event.inputs.reference_from != '')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -134,6 +141,8 @@ jobs:
         with:
           name: reference-${{ matrix.mode }}
           path: ref
+          run-id: ${{ github.event.inputs.reference_from || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           name: compiler-${{ matrix.mode }}-${{ matrix.host.name }}
