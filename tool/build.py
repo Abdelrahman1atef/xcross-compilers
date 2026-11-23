@@ -64,6 +64,34 @@ def gn_args(mode, os_name, cpu, sdk_hash):
     return args
 
 
+def visual_studio(env):
+    """Points Dart's toolchain script at the installed Visual Studio.
+
+    Dart's build/vs_toolchain.py only looks in the 2017, 2019 and 2022
+    folders; a newer Visual Studio (the windows-11-arm runners have one) is
+    not found unless vs2022_install names it.
+    """
+    if any(env.get(f'vs{year}_install') for year in ('2022', '2019', '2017')):
+        return
+    vswhere = os.path.join(
+        env.get('ProgramFiles(x86)', r'C:\Program Files (x86)'),
+        'Microsoft Visual Studio', 'Installer', 'vswhere.exe')
+    if not os.path.isfile(vswhere):
+        return
+    found = subprocess.run(
+        [vswhere, '-latest', '-products', '*', '-format', 'json'],
+        capture_output=True, text=True, check=False).stdout
+    try:
+        install = json.loads(found)[0]
+    except (ValueError, IndexError):
+        return
+    path = install.get('installationPath')
+    version = install.get('installationVersion', '')
+    if path and not version.startswith(('15.', '16.', '17.')):
+        env['vs2022_install'] = path
+        print(f'Visual Studio {version} at {path}: used as vs2022_install', flush=True)
+
+
 def gn_value(value):
     if isinstance(value, bool):
         return 'true' if value else 'false'
@@ -116,6 +144,7 @@ def main():
     env = dict(os.environ)
     if windows:
         env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'
+        visual_studio(env)
     run([gn, 'gen', out, '--args=' + ' '.join(f'{k}={gn_value(v)}' for k, v in arguments.items())],
         cwd=sdk, env=env)
     run([ninja, '-C', out, '-j', str(args.jobs), 'gen_snapshot'], cwd=sdk, env=env)

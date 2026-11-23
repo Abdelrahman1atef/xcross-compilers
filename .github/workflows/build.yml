@@ -111,6 +111,9 @@ jobs:
 
   verify:
     needs: [resolve, reference, build]
+    # Every compiler that built is verified, even when another build failed
+    # (its leg fails at the download). Publishing still needs all eight.
+    if: ${{ !cancelled() && needs.reference.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
