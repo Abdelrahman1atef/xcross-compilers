@@ -24,12 +24,16 @@ def sha256(path):
 
 
 def run(command, compiler, dill, out):
+    """Runs in [out] with outputs named relative to it (app.o, not
+    /Users/.../app.o): the compiler writes app.o's path into App (for
+    dsymutil), so absolute paths would differ on every machine."""
     os.makedirs(out, exist_ok=True)
     for name in command['outputs']:
         os.makedirs(os.path.dirname(os.path.join(out, name)) or out, exist_ok=True)
-    args = [a.replace('{dill}', dill).replace('{out}', out) for a in command['args']]
-    print('+ ' + ' '.join([compiler, *args]), flush=True)
-    subprocess.run([compiler, *args], check=True)
+    args = [a.replace('{dill}', dill).replace('{out}/', '').replace('{out}', '.')
+            for a in command['args']]
+    print(f'+ (in {out}) ' + ' '.join([compiler, *args]), flush=True)
+    subprocess.run([compiler, *args], check=True, cwd=out)
     return {name: sha256(os.path.join(out, name)) for name in command['outputs']}
 
 
