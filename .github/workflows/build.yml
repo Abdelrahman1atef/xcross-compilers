@@ -50,6 +50,7 @@ jobs:
     needs: resolve
     runs-on: macos-15
     strategy:
+      fail-fast: false
       matrix:
         mode: [release, profile]
     steps:
@@ -60,10 +61,15 @@ jobs:
           name: reference-${{ matrix.mode }}
           path: |
             ref/app.dill
-            ref/flags.json
             ref/command.json
-            ref/official.sha256
+            ref/official.json
             ref/official-version.txt
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-log-${{ matrix.mode }}
+          path: ref/build.log
+          if-no-files-found: ignore
 
   build:
     needs: resolve
