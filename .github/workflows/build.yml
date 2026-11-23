@@ -199,7 +199,13 @@ jobs:
             gh release upload "$VERSION" verified/*.zip --clobber
             gh release upload "$VERSION" verified/manifest.json --clobber
           else
-            gh release create "$VERSION" --title "Flutter $VERSION" \
+            # Only the highest Flutter version is "Latest": older versions
+            # published later (the backfill) must not take that label.
+            newest=$( (gh release list --limit 1000 --json tagName --jq '.[].tagName'; echo "$VERSION") \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            latest=false
+            [ "$newest" = "$VERSION" ] && latest=true
+            gh release create "$VERSION" --title "Flutter $VERSION" --latest="$latest" \
               --notes "iOS arm64 gen_snapshot for Flutter $VERSION (engine ${{ needs.resolve.outputs.engine }}, Dart ${{ needs.resolve.outputs.dart_version }}). Built from the Dart SDK sources; verified byte-identical to Flutter's official macOS compiler." \
               verified/*.zip verified/manifest.json
           fi
