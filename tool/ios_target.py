@@ -225,6 +225,52 @@ def edit_body_order(text):
             ['function body: prologue parts built in order'])
 
 
+BASENAME_MARKER = 'xcross-compilers: basename on Windows'
+
+BASENAME_WINDOWS = (
+    '#if defined(DART_HOST_OS_FUCHSIA)\n'
+    '  // Not handled for this operating system.\n'
+    '  return nullptr;\n'
+    '#elif defined(DART_HOST_OS_WINDOWS)\n'
+    f'  // {BASENAME_MARKER}. gen_snapshot names the DWARF compilation\n'
+    '  // unit of an App after its file (App.framework/App: "App"); without a\n'
+    '  // basename it used the root library\'s URI, and the app.o differed from\n'
+    '  // the one Flutter\'s compiler writes on macOS. POSIX basename, with\n'
+    '  // both separators.\n'
+    '  if (path == nullptr) return nullptr;\n'
+    '  intptr_t end = static_cast<intptr_t>(strlen(path));\n'
+    "  while (end > 1 && (path[end - 1] == '/' || path[end - 1] == '\\\\')) {\n"
+    '    end--;\n'
+    '  }\n'
+    '  if (end == 0) return Utils::StrDup(".");\n'
+    '  intptr_t start = end;\n'
+    "  while (start > 0 && path[start - 1] != '/' && path[start - 1] != '\\\\') {\n"
+    '    start--;\n'
+    '  }\n'
+    '  if (start == end) return Utils::StrNDup(path, 1);  // Only separators.\n'
+    '  return Utils::StrNDup(path + start, end - start);\n'
+    '#else\n'
+)
+
+
+def edit_basename(text):
+    """platform/utils.cc: Utils::Basename returns null on Windows."""
+    if BASENAME_MARKER in text:
+        return text, []
+    anchor = re.compile(
+        r'#if defined\(DART_HOST_OS_FUCHSIA\) \|\| defined\(DART_HOST_OS_WINDOWS\)\n'
+        r'\s*// Not handled for these operating systems\.\n'
+        r'\s*return nullptr;\n'
+        r'#else\n')
+    start = text.find('char* Utils::Basename(const char* path) {')
+    match = anchor.search(text, start) if start >= 0 else None
+    if match is None:
+        raise SystemExit('runtime/platform/utils.cc: the Windows branch of Utils::Basename '
+                         'was not found')
+    return (text[:match.start()] + BASENAME_WINDOWS + text[match.end():],
+            ['Utils::Basename works on Windows'])
+
+
 def install_sort_header(sdk):
     source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcross_apple_sort.h')
     target = os.path.join(sdk, 'runtime', 'platform', 'xcross_apple_sort.h')
@@ -268,6 +314,7 @@ def main():
     frontend = os.path.join(sdk, 'runtime', 'vm', 'compiler', 'frontend')
     edit_file(os.path.join(frontend, 'kernel_to_il.cc'), edit_deopt_ids)
     edit_file(os.path.join(frontend, 'kernel_binary_flowgraph.cc'), edit_body_order)
+    edit_file(os.path.join(sdk, 'runtime', 'platform', 'utils.cc'), edit_basename)
 
 
 if __name__ == '__main__':
