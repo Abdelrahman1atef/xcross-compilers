@@ -145,6 +145,8 @@ def main():
     if windows:
         env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'
         visual_studio(env)
+        run([sys.executable, os.path.join(TOOL, 'windows_host.py'),
+             os.path.join(sdk, 'build', 'vs_toolchain.py')], cwd=sdk)
     run([gn, 'gen', out, '--args=' + ' '.join(f'{k}={gn_value(v)}' for k, v in arguments.items())],
         cwd=sdk, env=env)
     run([ninja, '-C', out, '-j', str(args.jobs), 'gen_snapshot'], cwd=sdk, env=env)
