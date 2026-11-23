@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+/work/
+/dist/
+/ref/
+/compiler/
+/verified/

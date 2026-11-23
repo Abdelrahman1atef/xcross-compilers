@@ -1,0 +1,51 @@
+# Every day: start a build for each Flutter stable release that has no
+# compiler release here yet, oldest first, a few per day. Run it by hand to
+# backfill sooner (Actions > watch > Run workflow, with a larger limit).
+name: watch
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Most builds to start in this run
+        default: '4'
+      oldest:
+        description: Oldest Flutter version to build
+        default: '3.24.0'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LIMIT: ${{ github.event.inputs.limit || '4' }}
+      OLDEST: ${{ github.event.inputs.oldest || '3.24.0' }}
+    steps:
+      - name: Start builds for missing versions
+        run: |
+          key() { echo "$1" | awk -F. '{ printf "%05d%05d%05d", $1, $2, $3 }'; }
+          oldest=$(key "$OLDEST")
+          git ls-remote --tags https://github.com/flutter/flutter.git 'refs/tags/*' \
+            | sed 's#.*refs/tags/##; s#\^{}##' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -u > flutter.txt
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName \
+            --jq '.[].tagName' | sort -u > published.txt
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --limit 200 \
+            --json displayTitle,status --jq '.[] | select(.status != "completed") | .displayTitle' > running.txt || true
+          started=0
+          while read -r version; do
+            [ "$(key "$version")" \< "$oldest" ] && continue
+            grep -qx "$version" published.txt && continue
+            grep -q "$version" running.txt && continue
+            echo "Starting the build for Flutter $version"
+            gh workflow run build.yml --repo "$GITHUB_REPOSITORY" -f flutter="$version" -f publish=true
+            started=$((started + 1))
+            [ "$started" -ge "$LIMIT" ] && break
+          done < <(sort -t. -k1,1n -k2,2n -k3,3n flutter.txt)
+          echo "Started $started build(s)."
