@@ -1,11 +1,16 @@
-# Every day: start a build for each Flutter stable release that has no
-# compiler release here yet, oldest first, a few per day. Run it by hand to
-# backfill sooner (Actions > watch > Run workflow, with a larger limit).
+# Every six hours: start builds for Flutter stable releases that have no
+# compiler release here yet, newest first, a few at a time, so a new Flutter
+# release is covered within hours and older ones fill in behind it. Run it by
+# hand to go faster (Actions > watch > Run workflow, with a larger limit).
+#
+# A version whose build failed for real is not started again by itself (it
+# needs a look; start it by hand once fixed). Builds that only lost a job
+# because GitHub had no runner for it are re-run, up to three attempts.
 name: watch
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17 */6 * * *'
   workflow_dispatch:
     inputs:
       limit:
@@ -13,7 +18,7 @@ on:
         default: '4'
       oldest:
         description: Oldest Flutter version to build
-        default: '3.24.0'
+        default: '1.0.0'
 
 permissions:
   actions: write
@@ -25,7 +30,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       LIMIT: ${{ github.event.inputs.limit || '4' }}
-      OLDEST: ${{ github.event.inputs.oldest || '3.24.0' }}
+      OLDEST: ${{ github.event.inputs.oldest || '1.0.0' }}
     steps:
       - name: Retry builds GitHub could not give a runner
         # macOS arm64 runners are sometimes short ("The job was not acquired
@@ -33,7 +38,7 @@ jobs:
         # jobs (the compilers already built are kept), up to three attempts.
         run: |
           gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --status failure \
-            --limit 50 --json databaseId,attempt --jq '.[] | select(.attempt < 3) | .databaseId' |
+            --limit 100 --json databaseId,attempt --jq '.[] | select(.attempt < 3) | .databaseId' |
           while read -r run; do
             cancelled=$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json jobs \
               --jq '[.jobs[] | select(.conclusion == "cancelled")] | length')
@@ -53,16 +58,18 @@ jobs:
             | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -u > flutter.txt
           gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName \
             --jq '.[].tagName' | sort -u > published.txt
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --limit 200 \
-            --json displayTitle,status --jq '.[] | select(.status != "completed") | .displayTitle' > running.txt || true
+          # Every build run so far, by title ("build 3.47.8"): running, queued,
+          # or finished without publishing all mean "do not start it again".
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --limit 1000 \
+            --json displayTitle --jq '.[].displayTitle' | sort -u > runs.txt || true
           started=0
           while read -r version; do
             [ "$(key "$version")" \< "$oldest" ] && continue
             grep -qx "$version" published.txt && continue
-            grep -q "$version" running.txt && continue
+            grep -qx "build $version" runs.txt && continue
             echo "Starting the build for Flutter $version"
             gh workflow run build.yml --repo "$GITHUB_REPOSITORY" -f flutter="$version" -f publish=true
             started=$((started + 1))
             [ "$started" -ge "$LIMIT" ] && break
-          done < <(sort -t. -k1,1n -k2,2n -k3,3n flutter.txt)
+          done < <(sort -t. -k1,1nr -k2,2nr -k3,3nr flutter.txt)
           echo "Started $started build(s)."

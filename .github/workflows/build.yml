@@ -11,6 +11,7 @@
 # 5. publish: a release named after the Flutter version, with the zips and
 #    manifest.json (only when every compiler was verified).
 name: build
+run-name: build ${{ github.event.inputs.flutter || github.ref_name }}
 
 on:
   workflow_dispatch:
