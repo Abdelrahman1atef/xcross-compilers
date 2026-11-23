@@ -159,6 +159,72 @@ def edit_sort(text):
     return text, ['Sort: macOS\'s qsort for an iOS compiler off macOS']
 
 
+ORDER_MARKER = 'xcross-compilers: in order'
+
+ORDER_WHY = (
+    'C++ leaves the order of call arguments and of the operands of an\n'
+    '// overloaded "+" open; clang evaluates them left to right on Linux and\n'
+    '// macOS but right to left for the Microsoft ABI (Windows). Each builder\n'
+    '// call takes deopt ids, and the deopt id of a Suspend is its yield index\n'
+    '// in the App, so they are taken in the order Flutter\'s compiler on macOS\n'
+    '// takes them.'
+)
+
+
+def edit_deopt_ids(text):
+    """kernel_to_il.cc: `new SuspendInstr(..., GetNextDeoptId(),
+    GetNextDeoptId())` takes the two ids in either order: take them first."""
+    if ORDER_MARKER in text:
+        return text, []
+    pair = re.compile(
+        r'^(?P<indent>[ \t]*)(?P<head>[^;{}]*?)GetNextDeoptId\(\),\s*GetNextDeoptId\(\)'
+        r'(?P<tail>[^;{}]*;)\n', re.MULTILINE)
+    match = pair.search(text)
+    if match is None or 'SuspendInstr' not in match.group(0):
+        raise SystemExit('runtime/vm/compiler/frontend/kernel_to_il.cc: the two deopt ids of '
+                         'SuspendInstr were not found')
+    indent = match.group('indent')
+    replacement = (
+        f'{indent}// {ORDER_MARKER}.\n'
+        f'{indent}// {ORDER_WHY.replace(chr(10), chr(10) + indent)}\n'
+        f'{indent}const intptr_t xcross_deopt_id = GetNextDeoptId();\n'
+        f'{indent}const intptr_t xcross_resume_deopt_id = GetNextDeoptId();\n'
+        f'{indent}{match.group("head")}xcross_deopt_id, xcross_resume_deopt_id'
+        f'{match.group("tail")}\n'
+    )
+    return (text[:match.start()] + replacement + text[match.end():],
+            ['SuspendInstr: deopt ids taken in order'])
+
+
+def edit_body_order(text):
+    """kernel_binary_flowgraph.cc: `body = ClearRawParameters(...) +
+    InitSuspendableFunction(...) + BuildFunctionBody(...)` builds the three in
+    either order: build them one after the other."""
+    if ORDER_MARKER in text:
+        return text, []
+    chain = re.compile(
+        r'^(?P<indent>[ \t]*)const Fragment body =\s*'
+        r'(?P<first>ClearRawParameters\([^;]*?\))\s*\+\s*'
+        r'(?P<second>InitSuspendableFunction\([^;]*?\))\s*\+\s*'
+        r'(?P<third>BuildFunctionBody\([^;]*?\));\n', re.MULTILINE)
+    match = chain.search(text)
+    if match is None:
+        raise SystemExit('runtime/vm/compiler/frontend/kernel_binary_flowgraph.cc: '
+                         'ClearRawParameters + InitSuspendableFunction + BuildFunctionBody '
+                         'was not found')
+    indent = match.group('indent')
+    replacement = (
+        f'{indent}// {ORDER_MARKER}.\n'
+        f'{indent}// {ORDER_WHY.replace(chr(10), chr(10) + indent)}\n'
+        f'{indent}Fragment xcross_body = {match.group("first")};\n'
+        f'{indent}xcross_body += {match.group("second")};\n'
+        f'{indent}xcross_body += {match.group("third")};\n'
+        f'{indent}const Fragment body = xcross_body;\n'
+    )
+    return (text[:match.start()] + replacement + text[match.end():],
+            ['function body: prologue parts built in order'])
+
+
 def install_sort_header(sdk):
     source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcross_apple_sort.h')
     target = os.path.join(sdk, 'runtime', 'platform', 'xcross_apple_sort.h')
@@ -199,6 +265,9 @@ def main():
     edit_file(os.path.join(sdk, 'runtime', 'vm', 'version_in.cc'), edit_version)
     install_sort_header(sdk)
     edit_file(os.path.join(sdk, 'runtime', 'platform', 'growable_array.h'), edit_sort)
+    frontend = os.path.join(sdk, 'runtime', 'vm', 'compiler', 'frontend')
+    edit_file(os.path.join(frontend, 'kernel_to_il.cc'), edit_deopt_ids)
+    edit_file(os.path.join(frontend, 'kernel_binary_flowgraph.cc'), edit_body_order)
 
 
 if __name__ == '__main__':
