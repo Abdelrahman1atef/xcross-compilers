@@ -40,7 +40,8 @@ tool/local_build.sh 3.47.8 release
 One GN argument, `xcross_ios_compiler`, added by [`tool/ios_target.py`](tool/ios_target.py):
 
 - the compiler gets `DART_TARGET_OS_MACOS` and `DART_TARGET_OS_MACOS_IOS`, the defines Dart gives it when GN targets iOS (which needs a Mac), so it writes iOS arm64 code while it is built and run as a Linux or Windows program;
-- release builds keep the timeline, as Flutter's iOS VM does (Dart removes it from Linux product builds).
+- release builds keep the timeline, as Flutter's iOS VM does (Dart removes it from Linux product builds);
+- the version text ends `on "macos_arm64"`, as Flutter's official iOS compiler says on an Apple silicon Mac, instead of the build machine's `linux_simarm64` or `windows_arm64`. Dart writes this text into the DWARF producer of every `App` and `app.o`, so without it the output can never be byte-identical.
 
 The GN settings follow Flutter's engine for iOS: `dart_target_arch = "arm64"`, no compressed pointers, `dart_runtime_mode` release or profile, and `dart_sdk_verification_hash` set to the first ten characters of the Dart revision, as Flutter sets it.
 

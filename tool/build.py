@@ -130,8 +130,7 @@ def main():
     windows = os_name == 'windows'
     exe = '.exe' if windows else ''
 
-    run([sys.executable, os.path.join(TOOL, 'ios_target.py'),
-         os.path.join(sdk, 'runtime', 'BUILD.gn')], cwd=sdk)
+    run([sys.executable, os.path.join(TOOL, 'ios_target.py'), sdk], cwd=sdk)
 
     gn = os.path.join(sdk, 'buildtools', 'win', 'gn.exe') if windows else os.path.join(sdk, 'buildtools', 'gn')
     ninja = os.path.join(sdk, 'buildtools', 'ninja', 'ninja' + exe)

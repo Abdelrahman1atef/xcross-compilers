@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lets a Linux or Windows build of the Dart SDK make an iOS compiler.
 
-    python3 tool/ios_target.py <dart checkout>/sdk/runtime/BUILD.gn
+    python3 tool/ios_target.py <dart checkout>/sdk
 
 Dart decides what its AOT compiler targets from GN's target_os: only
 target_os == "ios" defines DART_TARGET_OS_MACOS and DART_TARGET_OS_MACOS_IOS,
@@ -19,6 +19,7 @@ anchor is missing, so a Dart version with a different layout is noticed
 instead of silently built wrong. Running it twice changes nothing.
 """
 
+import os
 import re
 import sys
 
@@ -83,15 +84,44 @@ def edit(text):
     return text, changes
 
 
-def main():
-    if len(sys.argv) != 2:
-        raise SystemExit('usage: ios_target.py <dart checkout>/sdk/runtime/BUILD.gn')
-    path = sys.argv[1]
+VERSION_MARKER = 'xcross-compilers: iOS compiler built off macOS'
+
+VERSION_HOST = (
+    '#if defined(DART_TARGET_OS_MACOS_IOS) && !defined(DART_HOST_OS_MACOS)\n'
+    f'    // {VERSION_MARKER}. This text is the DWARF\n'
+    '    // producer of every App and app.o, so it names the host that\n'
+    '    // Flutter\'s official iOS compiler names on Apple silicon, and the\n'
+    '    // output is byte-identical to that compiler\'s.\n'
+    '    " on \\"macos_arm64\\"";\n'
+    '#else\n'
+)
+
+
+def edit_version(text):
+    """Version::str_ ends with ' on "<host os>_<arch>"', and DWARF's producer
+    in every App is "Dart " + that text: Flutter's compiler on a Mac says
+    "macos_arm64", a Linux build "linux_simarm64". Use Flutter's."""
+    if VERSION_MARKER in text:
+        return text, []
+    start = text.find('const char* Version::str_ =')
+    if start < 0:
+        raise SystemExit('runtime/vm/version_in.cc: Version::str_ not found')
+    on = text.find('" on \\""', start)
+    end = text.find(';\n', on)
+    if on < 0 or end < 0:
+        raise SystemExit('runtime/vm/version_in.cc: the " on \\"<host>\\"" part was not found')
+    line = text.rfind('\n', 0, on) + 1
+    original = text[line:end + 2]
+    return (text[:line] + VERSION_HOST + original + '#endif\n' + text[end + 2:],
+            ['version text: on "macos_arm64" for an iOS compiler off macOS'])
+
+
+def edit_file(path, editor):
     with open(path, encoding='utf-8', newline='') as source:
         text = source.read()
     # A Windows checkout has CRLF line ends: edit with \n, write them back.
     crlf = '\r\n' in text
-    edited, changes = edit(text.replace('\r\n', '\n'))
+    edited, changes = editor(text.replace('\r\n', '\n'))
     if not changes:
         print(f'{path}: already set up')
         return
@@ -101,6 +131,14 @@ def main():
         target.write(edited)
     for change in changes:
         print(f'{path}: {change}')
+
+
+def main():
+    if len(sys.argv) != 2:
+        raise SystemExit('usage: ios_target.py <dart checkout>/sdk')
+    sdk = sys.argv[1]
+    edit_file(os.path.join(sdk, 'runtime', 'BUILD.gn'), edit)
+    edit_file(os.path.join(sdk, 'runtime', 'vm', 'version_in.cc'), edit_version)
 
 
 if __name__ == '__main__':
