@@ -89,10 +89,14 @@ def main():
     path = sys.argv[1]
     with open(path, encoding='utf-8', newline='') as source:
         text = source.read()
-    edited, changes = edit(text)
+    # A Windows checkout has CRLF line ends: edit with \n, write them back.
+    crlf = '\r\n' in text
+    edited, changes = edit(text.replace('\r\n', '\n'))
     if not changes:
         print(f'{path}: already set up')
         return
+    if crlf:
+        edited = edited.replace('\n', '\r\n')
     with open(path, 'w', encoding='utf-8', newline='') as target:
         target.write(edited)
     for change in changes:
