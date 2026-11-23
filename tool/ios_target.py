@@ -116,6 +116,59 @@ def edit_version(text):
             ['version text: on "macos_arm64" for an iOS compiler off macOS'])
 
 
+SORT_MARKER = 'xcross-compilers: order ties as macOS'
+
+SORT_CALL = re.compile(
+    r'^(?P<indent>[ \t]*)qsort\(data_,\s*length_,\s*sizeof\(T\),\s*'
+    r'reinterpret_cast<CompareFunction>\(compare\)\);\n',
+    re.MULTILINE,
+)
+
+
+def edit_sort(text):
+    """GrowableArray::Sort calls the C library's qsort, and the order of
+    ties is up to the library: an iOS compiler built off macOS uses
+    platform/xcross_apple_sort.h, macOS's qsort, instead."""
+    if SORT_MARKER in text:
+        return text, []
+    includes = list(re.finditer(r'^#include "platform/[^"]+"\n', text, re.MULTILINE))
+    call = SORT_CALL.search(text)
+    if not includes or call is None:
+        raise SystemExit('runtime/platform/growable_array.h: the qsort call in Sort was not found')
+    indent = call.group('indent')
+    replacement = (
+        '#if defined(DART_TARGET_OS_MACOS) && !defined(DART_HOST_OS_MACOS)\n'
+        f'{indent}// {SORT_MARKER}\'s qsort does (see\n'
+        f'{indent}// platform/xcross_apple_sort.h), so this iOS compiler writes the same\n'
+        f'{indent}// App as Flutter\'s compiler on macOS.\n'
+        f'{indent}xcross::AppleQsort(data_, length_, sizeof(T),\n'
+        f'{indent}                   reinterpret_cast<CompareFunction>(compare));\n'
+        '#else\n'
+        f'{call.group(0)}'
+        '#endif\n'
+    )
+    text = text[:call.start()] + replacement + text[call.end():]
+    end = includes[-1].end()
+    text = (text[:end] + '#include "platform/xcross_apple_sort.h"  // xcross-compilers\n'
+            + text[end:])
+    return text, ['Sort: macOS\'s qsort for an iOS compiler off macOS']
+
+
+def install_sort_header(sdk):
+    source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcross_apple_sort.h')
+    target = os.path.join(sdk, 'runtime', 'platform', 'xcross_apple_sort.h')
+    with open(source, encoding='utf-8') as header:
+        text = header.read()
+    existing = None
+    if os.path.isfile(target):
+        with open(target, encoding='utf-8') as current:
+            existing = current.read()
+    if existing != text:
+        with open(target, 'w', encoding='utf-8', newline='\n') as out:
+            out.write(text)
+        print(f'{target}: macOS\'s qsort and heapsort (BSD, from Apple\'s Libc)')
+
+
 def edit_file(path, editor):
     with open(path, encoding='utf-8', newline='') as source:
         text = source.read()
@@ -139,6 +192,8 @@ def main():
     sdk = sys.argv[1]
     edit_file(os.path.join(sdk, 'runtime', 'BUILD.gn'), edit)
     edit_file(os.path.join(sdk, 'runtime', 'vm', 'version_in.cc'), edit_version)
+    install_sort_header(sdk)
+    edit_file(os.path.join(sdk, 'runtime', 'platform', 'growable_array.h'), edit_sort)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,7 @@
 # xcross-compilers
 
+[![Support this project](https://img.shields.io/badge/Support-Sociabuzz-ff5e5b)](https://sociabuzz.com/man_atef/tribe)
+
 iOS arm64 AOT compilers (`gen_snapshot`) for **Linux and Windows** hosts, for every Flutter release. [xcross](https://github.com/Abdelrahman1atef/xcross-studio) uses them to build Flutter iOS release and profile apps without a Mac.
 
 Flutter publishes the iOS `gen_snapshot` for macOS only. This repository builds the same compiler from the Dart SDK revision each Flutter release pins, for `linux-x64`, `linux-arm64`, `windows-x64` and `windows-arm64`, and only publishes a compiler after CI has shown that it writes **byte-identical** output to Flutter's official macOS compiler.
@@ -41,9 +43,18 @@ One GN argument, `xcross_ios_compiler`, added by [`tool/ios_target.py`](tool/ios
 
 - the compiler gets `DART_TARGET_OS_MACOS` and `DART_TARGET_OS_MACOS_IOS`, the defines Dart gives it when GN targets iOS (which needs a Mac), so it writes iOS arm64 code while it is built and run as a Linux or Windows program;
 - release builds keep the timeline, as Flutter's iOS VM does (Dart removes it from Linux product builds);
-- the version text ends `on "macos_arm64"`, as Flutter's official iOS compiler says on an Apple silicon Mac, instead of the build machine's `linux_simarm64` or `windows_arm64`. Dart writes this text into the DWARF producer of every `App` and `app.o`, so without it the output can never be byte-identical.
+- the version text ends `on "macos_arm64"`, as Flutter's official iOS compiler says on an Apple silicon Mac, instead of the build machine's `linux_simarm64` or `windows_arm64`. Dart writes this text into the DWARF producer of every `App` and `app.o`, so without it the output can never be byte-identical;
+- `GrowableArray::Sort` uses macOS's own `qsort` ([`tool/xcross_apple_sort.h`](tool/xcross_apple_sort.h), transcribed from Apple's Libc, BSD licence). Dart sorts with ties (stack maps by usage count, dispatch table rows by popularity), and every C library orders ties its own way, so Linux, Windows and macOS compilers laid out the same app differently. The transcription is checked against Apple's original `qsort.c` and `heapsort.c` on 12,240 inputs.
 
 The GN settings follow Flutter's engine for iOS: `dart_target_arch = "arm64"`, no compressed pointers, `dart_runtime_mode` release or profile, and `dart_sdk_verification_hash` set to the first ten characters of the Dart revision, as Flutter sets it.
+
+## Support
+
+Every Flutter release needs a macOS reference build and eight compiler builds (four hosts, release and profile) before anything is published, and the daily watch keeps that going for each new version. If these compilers save you a Mac, you can help keep the builds running:
+
+**[Support on Sociabuzz](https://sociabuzz.com/man_atef/tribe)**
+
+Bug reports and pull requests help just as much.
 
 ## Licence
 

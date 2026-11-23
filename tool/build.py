@@ -172,6 +172,7 @@ def main():
         'LICENSE.boringssl': os.path.join(sdk, 'third_party', 'boringssl', 'src', 'LICENSE'),
         'LICENSE.double-conversion': os.path.join(
             sdk, 'runtime', 'third_party', 'double-conversion', 'LICENSE'),
+        'LICENSE.bsd-sort': os.path.join(TOOL, 'LICENSE.bsd-sort'),
     }
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         entry = zipfile.ZipInfo('gen_snapshot' + exe, date_time=(1980, 1, 1, 0, 0, 0))
