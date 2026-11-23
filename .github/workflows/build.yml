@@ -173,7 +173,9 @@ jobs:
 
   publish:
     needs: [resolve, verify]
-    if: github.event_name == 'push' || github.event.inputs.publish == 'true'
+    # Without !cancelled(), a reused reference (the reference job skipped)
+    # skips this job too, even when all eight compilers were verified.
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.verify.result == 'success' && (github.event_name == 'push' || github.event.inputs.publish == 'true') }}
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
