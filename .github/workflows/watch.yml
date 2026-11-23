@@ -18,7 +18,7 @@ on:
         default: '4'
       oldest:
         description: Oldest Flutter version to build
-        default: '1.0.0'
+        default: '3.0.0'
 
 permissions:
   actions: write
@@ -30,7 +30,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       LIMIT: ${{ github.event.inputs.limit || '4' }}
-      OLDEST: ${{ github.event.inputs.oldest || '1.0.0' }}
+      OLDEST: ${{ github.event.inputs.oldest || '3.0.0' }}
     steps:
       - name: Retry builds GitHub could not give a runner
         # macOS arm64 runners are sometimes short ("The job was not acquired

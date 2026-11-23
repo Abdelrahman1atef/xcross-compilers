@@ -22,7 +22,7 @@ Flutter publishes its iOS AOT compiler (`gen_snapshot`) **for macOS only**, so r
 
 ## What you get
 
-Each Flutter stable release that passes verification gets a release here, named after its version (`3.47.8`). New Flutter versions are added within hours; older ones are being filled in, newest first.
+Each Flutter stable release that passes verification gets a release here, named after its version (`3.47.8`). New Flutter versions are added within hours; older ones back to Flutter 3.0 are being filled in, newest first.
 
 | Host | Release | Profile |
 |---|:---:|:---:|
