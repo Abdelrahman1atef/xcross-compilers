@@ -1,0 +1,63 @@
+# Investigation only: runs the profile compilers of an earlier build run with
+# the flow-graph printer on, on Linux and Windows, so their compilations can
+# be compared function by function. Publishes nothing.
+#
+#   gh workflow run debug.yml -f run_id=<build run> [-f filter=<function>]
+#
+# Without a filter it lists, per function, the deopt ids of its Suspend
+# instructions (the yield index of each await) before and after optimizing.
+# With a filter it keeps the whole flow graph of the matching functions.
+name: debug
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Build run whose profile compilers and reference to use
+        required: true
+      filter:
+        description: Function name filter for the full flow graph (optional)
+        default: ''
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  trace:
+    strategy:
+      fail-fast: false
+      matrix:
+        host:
+          - { name: linux-x64, runner: ubuntu-24.04 }
+          - { name: windows-x64, runner: windows-2022 }
+    runs-on: ${{ matrix.host.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: reference-profile
+          path: ref
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-profile-${{ matrix.host.name }}
+          path: dist
+          run-id: ${{ github.event.inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Trace the compilation
+        env:
+          FILTER: ${{ github.event.inputs.filter }}
+        run: |
+          python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall('compiler')" dist/gen_snapshot-profile-${{ matrix.host.name }}.zip
+          chmod +x compiler/gen_snapshot* || true
+          python tool/trace_compile.py --compiler compiler/gen_snapshot${{ runner.os == 'Windows' && '.exe' || '' }} \
+            --reference ref --filter "$FILTER" --out trace-${{ matrix.host.name }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trace-${{ matrix.host.name }}
+          path: trace-${{ matrix.host.name }}.txt
