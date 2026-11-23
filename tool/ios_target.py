@@ -136,11 +136,16 @@ def edit_sort(text):
     if not includes or call is None:
         raise SystemExit('runtime/platform/growable_array.h: the qsort call in Sort was not found')
     indent = call.group('indent')
+    # Every translation unit, not only those that see the iOS target defines:
+    # Sort is an inline template, and the linker keeps one copy of each
+    # instantiation, so a unit that still called qsort could replace the
+    # macOS-ordered copy everywhere (Windows hosts kept such a copy).
     replacement = (
-        '#if defined(DART_TARGET_OS_MACOS) && !defined(DART_HOST_OS_MACOS)\n'
+        '#if !defined(DART_HOST_OS_MACOS)\n'
         f'{indent}// {SORT_MARKER}\'s qsort does (see\n'
         f'{indent}// platform/xcross_apple_sort.h), so this iOS compiler writes the same\n'
-        f'{indent}// App as Flutter\'s compiler on macOS.\n'
+        f'{indent}// App as Flutter\'s compiler on macOS. Every unit uses it, so the\n'
+        f'{indent}// linker cannot pick a qsort copy of an instantiation.\n'
         f'{indent}xcross::AppleQsort(data_, length_, sizeof(T),\n'
         f'{indent}                   reinterpret_cast<CompareFunction>(compare));\n'
         '#else\n'
