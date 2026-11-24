@@ -64,7 +64,7 @@ flowchart LR
 | **Verify** | each host | The new compiler compiles the same `app.dill` with the same command; `App` and `app.o` must equal Flutter's byte for byte |
 | **Publish** | Linux | Only when all eight compilers passed |
 
-All of it runs in [GitHub Actions](.github/workflows/build.yml). A [watcher](.github/workflows/watch.yml) checks every six hours and builds each Flutter release that has no compiler yet, newest first, so a new Flutter version is covered within hours.
+All of it runs in [GitHub Actions](.github/workflows/build.yml). A [watcher](.github/workflows/watch.yml) checks every two hours and builds each Flutter release that has no compiler yet, newest first, so a new Flutter version is covered within hours.
 
 <details>
 <summary><b>Build one yourself</b></summary>

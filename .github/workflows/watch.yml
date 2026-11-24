@@ -1,4 +1,4 @@
-# Every six hours: start builds for Flutter stable releases that have no
+# Every two hours: start builds for Flutter stable releases that have no
 # compiler release here yet, newest first, a few at a time, so a new Flutter
 # release is covered within hours and older ones fill in behind it. Run it by
 # hand to go faster (Actions > watch > Run workflow, with a larger limit).
@@ -10,12 +10,12 @@ name: watch
 
 on:
   schedule:
-    - cron: '17 */6 * * *'
+    - cron: '17 */2 * * *'
   workflow_dispatch:
     inputs:
       limit:
         description: Most builds to start in this run
-        default: '4'
+        default: '6'
       oldest:
         description: Oldest Flutter version to build
         default: '3.0.0'
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
-      LIMIT: ${{ github.event.inputs.limit || '4' }}
+      LIMIT: ${{ github.event.inputs.limit || '6' }}
       OLDEST: ${{ github.event.inputs.oldest || '3.0.0' }}
     steps:
       - name: Retry builds GitHub could not give a runner
