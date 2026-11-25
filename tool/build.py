@@ -134,6 +134,11 @@ def main():
     run([sys.executable, os.path.join(TOOL, 'ios_target.py'), sdk], cwd=sdk)
 
     gn = os.path.join(sdk, 'buildtools', 'win', 'gn.exe') if windows else os.path.join(sdk, 'buildtools', 'gn')
+    if not os.path.isfile(gn):
+        # Older Dart keeps gn in a differently named folder.
+        import glob
+        found = glob.glob(os.path.join(sdk, 'buildtools', '**', os.path.basename(gn)), recursive=True)
+        gn = found[0] if found else gn
     ninja = os.path.join(sdk, 'buildtools', 'ninja', 'ninja' + exe)
     if not os.path.isfile(ninja):
         # Older Dart (before 2.18) does not check ninja out: use the one on PATH.
@@ -148,10 +153,6 @@ def main():
     if windows:
         env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'
         visual_studio(env)
-        # Visual Studio 2026's C++ library refuses clang older than 22 (STL1000);
-        # older Dart bundles an older clang. The macro only turns that version
-        # check off; clang-cl reads _CL_ like cl.exe does.
-        env['_CL_'] = (env.get('_CL_', '') + ' -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH').strip()
         run([sys.executable, os.path.join(TOOL, 'windows_host.py'),
              os.path.join(sdk, 'build', 'vs_toolchain.py')], cwd=sdk)
     run([gn, 'gen', out, '--args=' + ' '.join(f'{k}={gn_value(v)}' for k, v in arguments.items())],

@@ -27,6 +27,8 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--require-all', action='store_true',
                         help='fail unless every host and mode is there')
+    parser.add_argument('--complete-hosts-only', action='store_true',
+                        help='keep only hosts that have release and profile; fail if none')
     args = parser.parse_args()
 
     assets = {}
@@ -43,6 +45,15 @@ def main():
             verification[record['asset']] = record['verified_sha256']
     if not assets:
         raise SystemExit(f'No build-*.json in {args.builds}')
+    if args.complete_hosts_only:
+        for host in HOSTS:
+            names = [f'gen_snapshot-{m}-{host}.zip' for m in MODES]
+            if not all(name in assets for name in names):
+                for name in names:
+                    assets.pop(name, None)
+                    verification.pop(name, None)
+        if not assets:
+            raise SystemExit('No host has both release and profile verified')
     if args.require_all:
         missing = [f'gen_snapshot-{m}-{h}.zip' for m in MODES for h in HOSTS
                    if f'gen_snapshot-{m}-{h}.zip' not in assets]

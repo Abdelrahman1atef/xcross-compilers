@@ -93,6 +93,27 @@ def patch(path, editor, message):
     print(f'{path}: {message}')
 
 
+CONFIG_MARKER = '# xcross-compilers: allow clang older than the STL expects'
+
+
+def edit_config(text):
+    """build/config/win/BUILD.gn: Visual Studio 2026's C++ library stops clang
+    older than 22 (STL1000); Dart before 3.11 bundles an older clang. The macro
+    only turns that version check off."""
+    if CONFIG_MARKER in text:
+        return text, False
+    anchor = '    "_SECURE_ATL",' + chr(10)
+    if anchor not in text:
+        return text, False
+    insert = ''.join([
+        anchor,
+        chr(10),
+        '    ', CONFIG_MARKER, chr(10),
+        '    "_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH",', chr(10),
+    ])
+    return text.replace(anchor, insert, 1), True
+
+
 def main():
     if len(sys.argv) != 2:
         raise SystemExit('usage: windows_host.py <dart checkout>/sdk/build/vs_toolchain.py')
@@ -101,6 +122,9 @@ def main():
     setup = os.path.join(os.path.dirname(path), 'toolchain', 'win', 'setup_toolchain.py')
     if os.path.isfile(setup):
         patch(setup, edit_sdk, 'falls back to the newest installed Windows SDK')
+    config = os.path.join(os.path.dirname(path), 'config', 'win', 'BUILD.gn')
+    if os.path.isfile(config):
+        patch(config, edit_config, 'defines _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH')
 
 
 if __name__ == '__main__':

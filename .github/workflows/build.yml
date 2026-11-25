@@ -9,7 +9,7 @@
 # 3. build: the compiler for every host and mode, from the Dart sources.
 # 4. verify: each built compiler must write the same bytes as Flutter's.
 # 5. publish: a release named after the Flutter version, with the zips and
-#    manifest.json (only when every compiler was verified).
+#    manifest.json (only the compilers that were verified).
 name: build
 run-name: build ${{ github.event.inputs.flutter || github.ref_name }}
 
@@ -178,8 +178,10 @@ jobs:
   publish:
     needs: [resolve, verify]
     # Without !cancelled(), a reused reference (the reference job skipped)
-    # skips this job too, even when all eight compilers were verified.
-    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.verify.result == 'success' && (github.event_name == 'push' || github.event.inputs.publish == 'true') }}
+    # skips this job too. A verify leg that failed does not stop the others
+    # from being published: only the compilers that matched Flutter's byte for
+    # byte are in the release (a host needs release and profile).
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'failure') && (github.event_name == 'push' || github.event.inputs.publish == 'true') }}
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
@@ -193,16 +195,19 @@ jobs:
           merge-multiple: true
       - name: Write manifest.json
         run: >
-          python3 tool/manifest.py --require-all
+          python3 tool/manifest.py --complete-hosts-only
           --flutter "$VERSION"
           --engine "${{ needs.resolve.outputs.engine }}"
           --dart "${{ needs.resolve.outputs.dart }}"
           --builds verified --out verified/manifest.json
       - name: Publish the release
         run: |
+          # Upload only what the manifest lists (the hosts that passed).
+          zips=$(python3 -c "import json; print(' '.join('verified/' + n for n in json.load(open('verified/manifest.json'))['assets']))")
+          hosts=$(python3 -c "import json; print(', '.join(sorted({n.rsplit('-', 2)[-2] + '-' + n.rsplit('-', 1)[-1][:-4] for n in json.load(open('verified/manifest.json'))['assets']})))")
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release $VERSION exists; replacing its files (manifest last)."
-            gh release upload "$VERSION" verified/*.zip --clobber
+            gh release upload "$VERSION" $zips --clobber
             gh release upload "$VERSION" verified/manifest.json --clobber
           else
             # Only the highest Flutter version is "Latest": older versions
@@ -212,6 +217,6 @@ jobs:
             latest=false
             [ "$newest" = "$VERSION" ] && latest=true
             gh release create "$VERSION" --title "Flutter $VERSION" --latest="$latest" \
-              --notes "iOS arm64 gen_snapshot for Flutter $VERSION (engine ${{ needs.resolve.outputs.engine }}, Dart ${{ needs.resolve.outputs.dart_version }}). Built from the Dart SDK sources; verified byte-identical to Flutter's official macOS compiler." \
-              verified/*.zip verified/manifest.json
+              --notes "iOS arm64 gen_snapshot for Flutter $VERSION (engine ${{ needs.resolve.outputs.engine }}, Dart ${{ needs.resolve.outputs.dart_version }}). Built from the Dart SDK sources; verified byte-identical to Flutter's official macOS compiler. Hosts: $hosts." \
+              $zips verified/manifest.json
           fi
