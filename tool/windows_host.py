@@ -32,8 +32,8 @@ def edit(text):
     if MARKER in text:
         return text, False
     anchor = re.compile(
-        r"^(?P<indent>[ \t]+)source_dir = os\.path\.join\(vc_redist_root,\s*\n"
-        r"\s*'arm64', vc_toolset_dir\)\n",
+        r"^(?P<indent>[ \t]+)source_dir = os\.path\.join\(vc_redist_root,\s*"
+        r"'arm64', vc_toolset_dir\)\n",
         re.MULTILINE,
     )
     match = anchor.search(text)

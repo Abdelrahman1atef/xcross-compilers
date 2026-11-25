@@ -149,6 +149,15 @@ def main():
 
     out = os.path.join('out', f'xcross-ios-{args.mode}-{host_name}')
     arguments = gn_args(args.mode, os_name, cpu, args.sdk_hash)
+    # Where third_party/perfetto could not be fetched (its mirror is gone), build
+    # without the code that needs it (tracing); the compiler's output does not
+    # depend on it.
+    args_gni = os.path.join(sdk, 'runtime', 'runtime_args.gni')
+    if (not os.path.isfile(os.path.join(sdk, 'third_party', 'perfetto', 'BUILD.gn'))
+            and os.path.isfile(args_gni)
+            and 'dart_support_perfetto' in open(args_gni, encoding='utf-8').read()):
+        arguments['dart_support_perfetto'] = False
+        print('third_party/perfetto is not there: dart_support_perfetto=false', flush=True)
     env = dict(os.environ)
     if windows:
         env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'
