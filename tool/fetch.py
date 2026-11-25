@@ -67,42 +67,36 @@ def main():
     dart = os.path.join(work, 'dart')
     os.makedirs(dart, exist_ok=True)
     custom_vars = ', '.join(f'"{k}": {v}' for k, v in SKIP.items())
-    with open(os.path.join(dart, '.gclient'), 'w', encoding='utf-8') as gclient:
-        gclient.write(
-            'solutions = [{\n'
-            '  "name": "sdk",\n'
-            f'  "url": "{DART_SDK}",\n'
-            '  "deps_file": "DEPS",\n'
-            '  "managed": False,\n'
-            f'  "custom_vars": {{{custom_vars}}},\n'
-            # perfetto (tracing for Android/Fuchsia) is fetched from a Fuchsia
-            # mirror that no longer exists; the compiler never uses it.
-            '  "custom_deps": {"sdk/third_party/perfetto": None},\n'
-            '}]\n'
-        )
+
+    def write_gclient(skip_perfetto):
+        # perfetto (tracing) is fetched from a Fuchsia mirror that no longer
+        # exists for some revisions. Dart's build files need it where it can be
+        # fetched, so it is skipped only after a first sync failed.
+        custom_deps = '{"sdk/third_party/perfetto": None}' if skip_perfetto else '{}'
+        with open(os.path.join(dart, '.gclient'), 'w', encoding='utf-8') as gclient:
+            gclient.write('\n'.join([
+                'solutions = [{',
+                '  "name": "sdk",',
+                f'  "url": "{DART_SDK}",',
+                '  "deps_file": "DEPS",',
+                '  "managed": False,',
+                f'  "custom_vars": {{{custom_vars}}},',
+                f'  "custom_deps": {custom_deps},',
+                '}]',
+                '',
+            ]))
+
     gclient = shutil.which('gclient.bat' if windows else 'gclient', path=env['PATH'])
     if gclient is None:
         raise SystemExit('gclient was not found in depot_tools')
     sync = [gclient, 'sync', '--no-history', '--shallow', '-D', '--force',
             '--reset', '--revision', f'sdk@{args.dart}', '--jobs', '8']
+    write_gclient(skip_perfetto=False)
     print('+', ' '.join(sync), flush=True)
     if subprocess.run(sync, cwd=dart, env=env).returncode != 0:
-        # The checked-in Dart SDK of some revisions (Dart 3.8) has a `version`
-        # file pub cannot parse on Windows ("3\n.8\n.1"). Join it, run the hooks
-        # again, and fail only if that does not help.
-        version_file = os.path.join(dart, 'sdk', 'tools', 'sdks', 'dart-sdk', 'version')
-        if not os.path.isfile(version_file):
-            raise SystemExit('gclient sync failed')
-        with open(version_file, encoding='utf-8', errors='replace', newline='') as source:
-            raw = source.read()
-        print(f'{version_file}: {raw!r}', flush=True)
-        joined = ''.join(raw.split())
-        if not joined or joined == raw.strip():
-            raise SystemExit('gclient sync failed')
-        with open(version_file, 'w', encoding='utf-8', newline='') as target:
-            target.write(joined + '\n')
-        print(f'{version_file}: now {joined!r}; running the hooks again', flush=True)
-        run([gclient, 'runhooks'], cwd=dart, env=env)
+        print('The sync failed; trying again without third_party/perfetto', flush=True)
+        write_gclient(skip_perfetto=True)
+        run(sync, cwd=dart, env=env)
     print(f'Dart SDK {args.dart} is in {os.path.join(dart, "sdk")}')
 
 

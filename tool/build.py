@@ -23,6 +23,7 @@ import json
 import os
 import platform
 import stat
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -134,6 +135,9 @@ def main():
 
     gn = os.path.join(sdk, 'buildtools', 'win', 'gn.exe') if windows else os.path.join(sdk, 'buildtools', 'gn')
     ninja = os.path.join(sdk, 'buildtools', 'ninja', 'ninja' + exe)
+    if not os.path.isfile(ninja):
+        # Older Dart (before 2.18) does not check ninja out: use the one on PATH.
+        ninja = shutil.which('ninja') or ninja
     for tool in (gn, ninja):
         if not os.path.isfile(tool):
             raise SystemExit(f'{tool} is missing: run tool/fetch.py first')

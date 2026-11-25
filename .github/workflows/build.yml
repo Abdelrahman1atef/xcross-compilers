@@ -99,7 +99,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          # Dart before 3.3 imports `imp`, which Python 3.12 removed.
+          python-version: '3.11'
+      - name: Install ninja
+        # Older Dart does not check ninja out; the newer ones use their own.
+        run: python -m pip install ninja
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
