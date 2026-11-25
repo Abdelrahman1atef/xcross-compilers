@@ -181,6 +181,9 @@ def edit_deopt_ids(text):
         r'(?P<tail>[^;{}]*;)\n', re.MULTILINE)
     match = pair.search(text)
     if match is None or 'SuspendInstr' not in match.group(0):
+        if 'SuspendInstr' not in text:
+            print('kernel_to_il.cc: this Dart has no SuspendInstr; nothing to order')
+            return text, []
         raise SystemExit('runtime/vm/compiler/frontend/kernel_to_il.cc: the two deopt ids of '
                          'SuspendInstr were not found')
     indent = match.group('indent')
@@ -209,6 +212,10 @@ def edit_body_order(text):
         r'(?P<third>BuildFunctionBody\([^;]*?\));\n', re.MULTILINE)
     match = chain.search(text)
     if match is None:
+        if 'InitSuspendableFunction' not in text:
+            print('kernel_binary_flowgraph.cc: this Dart has no InitSuspendableFunction; '
+                  'nothing to order')
+            return text, []
         raise SystemExit('runtime/vm/compiler/frontend/kernel_binary_flowgraph.cc: '
                          'ClearRawParameters + InitSuspendableFunction + BuildFunctionBody '
                          'was not found')
@@ -263,7 +270,10 @@ def edit_basename(text):
         r'\s*return nullptr;\n'
         r'#else\n')
     start = text.find('char* Utils::Basename(const char* path) {')
-    match = anchor.search(text, start) if start >= 0 else None
+    if start < 0:
+        print('utils.cc: this Dart has no Utils::Basename (added in Dart 3.9); nothing to fix')
+        return text, []
+    match = anchor.search(text, start)
     if match is None:
         raise SystemExit('runtime/platform/utils.cc: the Windows branch of Utils::Basename '
                          'was not found')

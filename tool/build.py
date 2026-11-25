@@ -144,6 +144,10 @@ def main():
     if windows:
         env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'
         visual_studio(env)
+        # Visual Studio 2026's C++ library refuses clang older than 22 (STL1000);
+        # older Dart bundles an older clang. The macro only turns that version
+        # check off; clang-cl reads _CL_ like cl.exe does.
+        env['_CL_'] = (env.get('_CL_', '') + ' -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH').strip()
         run([sys.executable, os.path.join(TOOL, 'windows_host.py'),
              os.path.join(sdk, 'build', 'vs_toolchain.py')], cwd=sdk)
     run([gn, 'gen', out, '--args=' + ' '.join(f'{k}={gn_value(v)}' for k, v in arguments.items())],
