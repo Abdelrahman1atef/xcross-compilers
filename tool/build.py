@@ -157,7 +157,16 @@ def main():
             and os.path.isfile(args_gni)
             and 'dart_support_perfetto' in open(args_gni, encoding='utf-8').read()):
         arguments['dart_support_perfetto'] = False
-        print('third_party/perfetto is not there: dart_support_perfetto=false', flush=True)
+        # runtime/vm/BUILD.gn still declares perfetto's proto targets, which name
+        # perfetto's protoc plugin; gn must find that target to load the file.
+        # Nothing built here uses it, so an empty group stands in for it.
+        stub = os.path.join(sdk, 'third_party', 'perfetto', 'src', 'protozero', 'protoc_plugin')
+        os.makedirs(stub, exist_ok=True)
+        with open(os.path.join(stub, 'BUILD.gn'), 'w', encoding='utf-8', newline='\n') as handle:
+            handle.write('# xcross-compilers: stand-in, perfetto could not be fetched.\n'
+                         'group("protozero_plugin") {\n}\n')
+        print('third_party/perfetto is not there: dart_support_perfetto=false, '
+              'protozero_plugin stands in', flush=True)
     env = dict(os.environ)
     if windows:
         env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '0'

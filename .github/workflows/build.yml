@@ -26,6 +26,9 @@ on:
       reference_from:
         description: Reuse the macOS reference of this earlier run of the same Flutter version (optional)
         default: ''
+      hosts:
+        description: "all (default) or linux (only the Linux compilers)"
+        default: all
   push:
     tags: ['[0-9]+.[0-9]+.[0-9]+']
 
@@ -46,8 +49,18 @@ jobs:
       dart: ${{ steps.resolve.outputs.dart }}
       dart_version: ${{ steps.resolve.outputs.dart_version }}
       sdk_hash: ${{ steps.resolve.outputs.sdk_hash }}
+      hosts: ${{ steps.hosts.outputs.hosts }}
     steps:
       - uses: actions/checkout@v4
+      - id: hosts
+        # `linux` builds only the Linux compilers; the default builds all four hosts.
+        env:
+          HOSTS: ${{ github.event.inputs.hosts }}
+        run: |
+          linux='{"name":"linux-x64","runner":"ubuntu-24.04"},{"name":"linux-arm64","runner":"ubuntu-24.04-arm"}'
+          windows='{"name":"windows-x64","runner":"windows-2022"},{"name":"windows-arm64","runner":"windows-11-arm"}'
+          if [ "$HOSTS" = "linux" ]; then echo "hosts=[$linux]" >> "$GITHUB_OUTPUT"
+          else echo "hosts=[$linux,$windows]" >> "$GITHUB_OUTPUT"; fi
       - id: resolve
         run: python3 tool/resolve.py "${{ github.event.inputs.flutter || github.ref_name }}" --github-output "$GITHUB_OUTPUT"
 
@@ -86,11 +99,7 @@ jobs:
       fail-fast: false
       matrix:
         mode: [release, profile]
-        host:
-          - { name: linux-x64, runner: ubuntu-24.04 }
-          - { name: linux-arm64, runner: ubuntu-24.04-arm }
-          - { name: windows-x64, runner: windows-2022 }
-          - { name: windows-arm64, runner: windows-11-arm }
+        host: ${{ fromJSON(needs.resolve.outputs.hosts) }}
     runs-on: ${{ matrix.host.runner }}
     defaults:
       run:
@@ -131,11 +140,7 @@ jobs:
       fail-fast: false
       matrix:
         mode: [release, profile]
-        host:
-          - { name: linux-x64, runner: ubuntu-24.04 }
-          - { name: linux-arm64, runner: ubuntu-24.04-arm }
-          - { name: windows-x64, runner: windows-2022 }
-          - { name: windows-arm64, runner: windows-11-arm }
+        host: ${{ fromJSON(needs.resolve.outputs.hosts) }}
     runs-on: ${{ matrix.host.runner }}
     defaults:
       run:
