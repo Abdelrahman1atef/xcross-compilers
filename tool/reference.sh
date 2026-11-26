@@ -18,6 +18,16 @@ tool="$(cd "$(dirname "$0")" && pwd)"
 work="$(mktemp -d)"
 
 git clone --depth 1 --branch "$version" https://github.com/flutter/flutter.git "$work/flutter"
+# Some releases (3.29.0) compute the engine version with
+# `git merge-base HEAD origin/master` and, off the stable branch, overwrite the
+# committed engine.version with it. A shallow tag clone has neither: name the
+# checkout "stable" (keeps engine.version) and give it an origin/master.
+# Later releases skip this when engine.version is tracked (ls-files).
+script="$work/flutter/bin/internal/update_engine_version.sh"
+if grep -q 'origin/master' "$script" 2>/dev/null && ! grep -q 'ls-files bin/internal/engine.version' "$script"; then
+  git -C "$work/flutter" checkout -q -B stable
+  git -C "$work/flutter" update-ref refs/remotes/origin/master HEAD
+fi
 export PATH="$work/flutter/bin:$PATH"
 flutter --version
 flutter precache --ios
