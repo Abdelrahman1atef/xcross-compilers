@@ -281,6 +281,35 @@ def edit_basename(text):
             ['Utils::Basename works on Windows'])
 
 
+FFI_KIND_MARKER = 'xcross-compilers: callback_kind_ as on macOS'
+FFI_KIND_WHY = (
+    'xcross-compilers: callback_kind_ as on macOS. This Dart never sets it for\n'
+    'non-callbacks (the @Native functions of dart:ui), so it keeps a byte of the\n'
+    'null pointer the object was filled with, and the snapshot records it:\n'
+    "128 under Flutter's macOS compiler, 255 on Linux. Only callbacks read it,\n"
+    'and they set it.')
+
+
+def edit_ffi_kind(text):
+    """object.cc (Dart 3.1): FfiTrampolineData::New leaves callback_kind_ unset."""
+    if FFI_KIND_MARKER in text:
+        return text, []
+    start = text.find('FfiTrampolineDataPtr FfiTrampolineData::New() {')
+    if start < 0 or 'untag()->callback_kind_' not in text:
+        print('object.cc: no FfiTrampolineData::callback_kind_ to set; nothing to fix')
+        return text, []
+    end = text.find('\n}\n', start)
+    body = text[start:end]
+    anchor = '  data->untag()->is_leaf_ = false;\n'
+    if 'callback_kind_ =' in body:
+        return text, []
+    if anchor not in body:
+        raise SystemExit('runtime/vm/object.cc: FfiTrampolineData::New has no is_leaf_ line')
+    comment = ''.join(f'  // {line}\n' for line in FFI_KIND_WHY.split('\n'))
+    body = body.replace(anchor, anchor + comment + '  data->untag()->callback_kind_ = 0x80;\n')
+    return text[:start] + body + text[end:], ['FfiTrampolineData::callback_kind_ starts at 128']
+
+
 def install_sort_header(sdk):
     source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcross_apple_sort.h')
     target = os.path.join(sdk, 'runtime', 'platform', 'xcross_apple_sort.h')
@@ -325,6 +354,7 @@ def main():
     edit_file(os.path.join(frontend, 'kernel_to_il.cc'), edit_deopt_ids)
     edit_file(os.path.join(frontend, 'kernel_binary_flowgraph.cc'), edit_body_order)
     edit_file(os.path.join(sdk, 'runtime', 'platform', 'utils.cc'), edit_basename)
+    edit_file(os.path.join(sdk, 'runtime', 'vm', 'object.cc'), edit_ffi_kind)
 
 
 if __name__ == '__main__':
