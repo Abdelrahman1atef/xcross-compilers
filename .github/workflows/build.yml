@@ -213,6 +213,12 @@ jobs:
           zips=$(python3 -c "import json; print(' '.join('verified/' + n for n in json.load(open('verified/manifest.json'))['assets']))")
           hosts=$(python3 -c "import json; print(', '.join(sorted({n.rsplit('-', 2)[-2] + '-' + n.rsplit('-', 1)[-1][:-4] for n in json.load(open('verified/manifest.json'))['assets']})))")
           if gh release view "$VERSION" >/dev/null 2>&1; then
+            # A rebuild never shrinks a release: replace its files only when
+            # every compiler of this run was verified.
+            if [ "${{ needs.verify.result }}" != "success" ]; then
+              echo "Release $VERSION exists and not every compiler was verified: left as it is."
+              exit 0
+            fi
             echo "Release $VERSION exists; replacing its files (manifest last)."
             gh release upload "$VERSION" $zips --clobber
             gh release upload "$VERSION" verified/manifest.json --clobber
