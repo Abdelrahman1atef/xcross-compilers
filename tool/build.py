@@ -10,7 +10,7 @@ Flutter's engine uses for its iOS Dart VM, so the compiler's output matches
 what that VM loads:
 
 - dart_target_arch arm64 (iOS devices), no compressed pointers (Flutter keeps
-  them off on iOS);
+  them off on iOS since 3.0.4; --compressed-pointers true for 3.0.0 to 3.0.3);
 - dart_runtime_mode release (product) or profile;
 - dart_sdk_verification_hash set like Flutter's (first ten characters of the
   Dart revision), or the compiler refuses Flutter's app.dill;
@@ -43,13 +43,13 @@ def host():
     return os_name, cpu
 
 
-def gn_args(mode, os_name, cpu, sdk_hash):
+def gn_args(mode, os_name, cpu, sdk_hash, compressed_pointers=False):
     args = {
         'target_os': 'win' if os_name == 'windows' else 'linux',
         'target_cpu': cpu,
         'host_cpu': cpu,
         'dart_target_arch': 'arm64',
-        'dart_use_compressed_pointers': False,
+        'dart_use_compressed_pointers': compressed_pointers,
         'dart_runtime_mode': 'release' if mode == 'release' else 'profile',
         'is_debug': False,
         'is_release': mode == 'profile',
@@ -122,6 +122,8 @@ def main():
     parser.add_argument('--sdk-hash', required=True)
     parser.add_argument('--dart-version', required=True, help='expected --version')
     parser.add_argument('--out', required=True)
+    parser.add_argument('--compressed-pointers', choices=['true', 'false'], default='false',
+                        help="as Flutter's iOS VM (tool/resolve.py compressed_pointers)")
     parser.add_argument('--jobs', type=int, default=os.cpu_count() or 4)
     args = parser.parse_args()
 
@@ -148,7 +150,8 @@ def main():
             raise SystemExit(f'{tool} is missing: run tool/fetch.py first')
 
     out = os.path.join('out', f'xcross-ios-{args.mode}-{host_name}')
-    arguments = gn_args(args.mode, os_name, cpu, args.sdk_hash)
+    arguments = gn_args(args.mode, os_name, cpu, args.sdk_hash,
+                        args.compressed_pointers == 'true')
     # Where third_party/perfetto could not be fetched (its mirror is gone), build
     # without the code that needs it (tracing); the compiler's output does not
     # depend on it.

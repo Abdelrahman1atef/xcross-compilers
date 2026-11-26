@@ -47,6 +47,30 @@ def dart_version(dart):
     return version
 
 
+def ios_compressed_pointers(flutter, engine):
+    """Whether Flutter's engine built its iOS Dart VM with compressed pointers.
+
+    Flutter 3.0.0 to 3.0.3 (and the 3.1.0 beta) turned them on for iOS; from
+    3.0.4 on, only Android has them. The compiler must match the VM. Decided
+    from the condition guarding dart_use_compressed_pointers in tools/gn.
+    """
+    gn = (fetch('flutter/flutter', flutter, 'engine/src/flutter/tools/gn')
+          or fetch('flutter/engine', engine, 'tools/gn'))
+    if gn is None:
+        raise SystemExit(f'No engine tools/gn found for Flutter {flutter} (engine {engine})')
+    lines = gn.splitlines()
+    for index, line in enumerate(lines):
+        if "gn_args['dart_use_compressed_pointers'] = True" not in line:
+            continue
+        start = index - 1
+        while start >= 0 and not lines[start].lstrip().startswith('if '):
+            start -= 1
+        condition = '\n'.join(lines[max(start, 0):index])
+        if "'ios'" in condition or '"ios"' in condition:
+            return True
+    return False
+
+
 def resolve(flutter):
     if not VERSION.match(flutter):
         raise SystemExit(f'"{flutter}" is not a Flutter release such as 3.47.8')
@@ -71,6 +95,7 @@ def resolve(flutter):
         # characters of the Dart revision; the compiler must use the same,
         # or it refuses the app.dill Flutter compiles.
         'sdk_hash': dart[:10],
+        'compressed_pointers': 'true' if ios_compressed_pointers(flutter, engine) else 'false',
     }
 
 

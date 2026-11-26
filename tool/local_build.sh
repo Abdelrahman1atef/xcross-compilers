@@ -22,4 +22,5 @@ echo "$resolved"
 python3 "$tool/fetch.py" --dart "$dart" --work ~/xc/work
 python3 "$tool/build.py" --sdk ~/xc/work/dart/sdk --mode "$mode" \
   --sdk-hash "$(field sdk_hash)" --dart-version "$(field dart_version)" \
+  --compressed-pointers "$(field compressed_pointers)" \
   --out ~/xc/dist --jobs "$jobs"

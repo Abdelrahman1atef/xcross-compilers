@@ -49,6 +49,7 @@ jobs:
       dart: ${{ steps.resolve.outputs.dart }}
       dart_version: ${{ steps.resolve.outputs.dart_version }}
       sdk_hash: ${{ steps.resolve.outputs.sdk_hash }}
+      compressed_pointers: ${{ steps.resolve.outputs.compressed_pointers }}
       hosts: ${{ steps.hosts.outputs.hosts }}
     steps:
       - uses: actions/checkout@v4
@@ -125,6 +126,7 @@ jobs:
           --mode "${{ matrix.mode }}"
           --sdk-hash "${{ needs.resolve.outputs.sdk_hash }}"
           --dart-version "${{ needs.resolve.outputs.dart_version }}"
+          --compressed-pointers "${{ needs.resolve.outputs.compressed_pointers }}"
           --out dist
       - uses: actions/upload-artifact@v4
         with:
