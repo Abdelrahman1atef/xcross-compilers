@@ -21,6 +21,7 @@ instead of silently built wrong. Running it twice changes nothing.
 
 import os
 import re
+import shutil
 import sys
 
 ARG = 'xcross_ios_compiler'
@@ -310,6 +311,44 @@ def edit_ffi_kind(text):
     return text[:start] + body + text[end:], ['FfiTrampolineData::callback_kind_ starts at 128']
 
 
+ORIGINAL = '.xcross-orig'
+HASH_MARKER = 'xcross-compilers: hash the unedited source'
+
+
+def edit_snapshot_hash(text):
+    """tools/make_version.py: hash a VM file's unedited copy when there is one.
+
+    The snapshot hash Dart writes into every snapshot is an MD5 of some VM
+    sources (VM_SNAPSHOT_FILES, object.cc among them). An edit to one of them
+    would change that hash and so the output; Flutter's compiler hashed the
+    unedited file.
+    """
+    if HASH_MARKER in text:
+        return text, []
+    match = re.search(r"\n( +)vmfilepath = os\.path\.join\(utils\.DART_DIR, 'runtime', 'vm', vmfilename\)\n",
+                      text)
+    if match is None:
+        raise SystemExit('tools/make_version.py: the VM_SNAPSHOT_FILES loop was not found')
+    indent = match.group(1)
+    added = (f"{indent}if os.path.isfile(vmfilepath + '{ORIGINAL}'):  # {HASH_MARKER}\n"
+             f"{indent}    vmfilepath += '{ORIGINAL}'\n")
+    return text[:match.end()] + added + text[match.end():], ['snapshot hash from unedited VM files']
+
+
+def edit_vm_file(sdk, name, editor):
+    """Edits runtime/vm/<name>, first keeping an unedited copy for the snapshot hash."""
+    path = os.path.join(sdk, 'runtime', 'vm', name)
+    with open(path, encoding='utf-8', newline='') as source:
+        text = source.read()
+    if not editor(text.replace('\r\n', '\n'))[1]:
+        print(f'{path}: already set up or nothing to change')
+        return
+    if not os.path.isfile(path + ORIGINAL):
+        shutil.copyfile(path, path + ORIGINAL)
+    edit_file(path, editor)
+    edit_file(os.path.join(sdk, 'tools', 'make_version.py'), edit_snapshot_hash)
+
+
 def install_sort_header(sdk):
     source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xcross_apple_sort.h')
     target = os.path.join(sdk, 'runtime', 'platform', 'xcross_apple_sort.h')
@@ -354,7 +393,7 @@ def main():
     edit_file(os.path.join(frontend, 'kernel_to_il.cc'), edit_deopt_ids)
     edit_file(os.path.join(frontend, 'kernel_binary_flowgraph.cc'), edit_body_order)
     edit_file(os.path.join(sdk, 'runtime', 'platform', 'utils.cc'), edit_basename)
-    edit_file(os.path.join(sdk, 'runtime', 'vm', 'object.cc'), edit_ffi_kind)
+    edit_vm_file(sdk, 'object.cc', edit_ffi_kind)
 
 
 if __name__ == '__main__':
